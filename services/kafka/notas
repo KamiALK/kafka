@@ -1,0 +1,11 @@
+kafka-kafka-1
+    425736b218c3
+    docker exec -it 425736b218c3 bash
+    172.20.0.3
+    
+crear topics
+    kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic links
+    
+
+
+
