@@ -6,11 +6,11 @@ import BaileysProvider from "@bot-whatsapp/provider/baileys";
 import MockAdapter from "@bot-whatsapp/database/mock";
 
 // import chatgpt from "./services/openai/chatgpt.js";
-import GoogleSheetService from "./services/sheets/index.js";
+// import GoogleSheetService from "./services/sheets/index.js";
 
-const googelSheet = new GoogleSheetService(
-  "1pcBkWWa0x-q-mwV54bRMOixjCv-tFVvLSrzGPsPPQgQ",
-);
+// const googelSheet = new GoogleSheetService(
+//   "1pcBkWWa0x-q-mwV54bRMOixjCv-tFVvLSrzGPsPPQgQ",
+// );
 
 // Importa la función sendKafkaMessage desde el archivo producer.js
 import { sendKafkaMessage } from "./services/kafka/producer.js";
@@ -55,6 +55,39 @@ const flowLinks = bot
     },
   );
 
+const flowPdf = bot
+  .addKeyword([ "pdf", "audio"]) // Agrega "audio" como palabra clave
+  .addAnswer([`Bienvenidos a mi asistente de examen`, `Escribe el *link* o envía un PDF o audio`])
+  .addAnswer(
+    `¿Te interesa algún enlace o quieres enviar un PDF o audio?`,
+    { capture: true },
+    async (ctx, { gotoFlow }) => {
+      try {
+        // Verificar si el mensaje es un enlace, un PDF o un audio
+        const isLink = ctx.body.includes("http");
+        const isPDF = ctx.message.attachments.find(attachment => attachment.type === "document" && attachment.payload.mimetype === "application/pdf");
+        const isAudio = ctx.message.attachments.find(attachment => attachment.type === "audio");
+
+        if (isLink) {
+          const linkUsuario = ctx.body.trim(); // Capturar el enlace proporcionado por el usuario
+          await sendKafkaMessage("prueba", linkUsuario); // Enviar el enlace al topic de Kafka
+        } else if (isPDF) {
+          const pdfURL = isPDF.payload.url; // Obtener la URL del PDF adjunto
+          await sendKafkaMessage("prueba", pdfURL); // Enviar la URL del PDF al topic de Kafka
+        } else if (isAudio) {
+          const audioURL = isAudio.payload.url; // Obtener la URL del audio adjunto
+          await sendKafkaMessage("prueba", audioURL); // Enviar la URL del audio al topic de Kafka
+        }
+
+        // Redirigir al siguiente flujo
+        return gotoFlow(flowLinks);
+      } catch (error) {
+        console.error("Ocurrió un error:", error);
+        // Redirigir al flujo principal en caso de error
+        return gotoFlow(flowLinks);
+      }
+    },
+  );
 let GLOBAL_STATE = [];
 const MENU_CLIENTE = {
   pollo: [],
@@ -641,6 +674,7 @@ const main = async () => {
   const adapterDB = new MockAdapter();
   const adapterFlow = bot.createFlow([
     flowLinks,
+    flowPdf,
 
     flowPedido,
     flowPollo,

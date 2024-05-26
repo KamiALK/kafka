@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const kafka = new Kafka({
+  // brokers: ["localhost:9092"],
   brokers: ["localhost:9092"],
 });
 const producer = kafka.producer();
