@@ -28,32 +28,124 @@ async function enviarMensajeHola() {
     console.error("Error al enviar el mensaje:", error.message);
   }
 }
-
-// Llama a la función para enviar el mensaje "hola"
 enviarMensajeHola();
+
+let GLOBAL_OPTS = {};
+let opcionSeleccionadaGlobal = null; // Variable global para almacenar la elección del usuario
 
 const flowLinks = bot
   .addKeyword(["links", "pdf"])
-  .addAnswer([`Bienvenidos a mi asistente de examen `, `Escribe el *link*`])
+  .addAnswer([
+    `Bienvenidos a mi asistente de examen`,
+    `selecciona segun la opcion:`,
+    `- 1. Descargar video`,
+    `- 2. Descargar audio`,
+    `- 3. Playlist de audio`,
+    `- 4. Playlist de video`,
+  ])
   .addAnswer(
-    `¿Te interesa algún enlace?`, // Preguntar al usuario si está interesado en algún enlace
+    `marca cualquier opcion: 1 2 3 4`,
     { capture: true },
-    async (ctx, { gotoFlow }) => {
+    async (ctx, { gotoFlow, state }) => {
       try {
-        const linkUsuario = ctx.body.trim(); // Capturar el enlace proporcionado por el usuario
-
-        // Enviar el enlace al topic de Kafka utilizando la función sendKafkaMessage
-        await sendKafkaMessage("prueba", linkUsuario); // Asegúrate de reemplazar "mi-tema" con el nombre del topic correcto
-
-        // Redirigir al siguiente flujo
-        return gotoFlow(flowLinks);
+      GLOBAL_OPTS = {};
+        const opcionSeleccionada = parseInt(ctx.body.trim());
+        
+        // Verificar si la opción seleccionada es válida
+        if (opcionSeleccionada >= 1 && opcionSeleccionada <= 4) {
+          opcionSeleccionadaGlobal = opcionSeleccionada; // Almacenar la elección del usuario en la variable global
+          // return gotoFlow('esperarLink');
+        } else {
+          console.error("Opción seleccionada no válida.");
+          // return gotoFlow(flowLinks);
+        }
       } catch (error) {
         console.error("Ocurrió un error:", error);
-        // Redirigir al flujo principal en caso de error
+        // return gotoFlow(flowLinks);
+      }
+    }
+  )
+  .addAnswer(
+    `Ahora por favor ingrese el link`,
+    { capture: true,  }, // Indicar que esta respuesta pertenece al flujo 'esperarLink'
+    async (ctx, { gotoFlow }) => {
+      try {
+        const linkUsuario = ctx.body.trim();
+
+        // Obtener la opción seleccionada del usuario desde la variable global
+        const opcionSeleccionada = opcionSeleccionadaGlobal;
+
+        // Verificar si la opción seleccionada es válida
+        if (opcionSeleccionada) {
+          GLOBAL_OPTS[opcionSeleccionada] = linkUsuario; // Asignar el enlace proporcionado por el usuario a la opción seleccionada
+          console.log(GLOBAL_OPTS);
+
+        sendKafkaMessage("prueba", JSON.stringify(GLOBAL_OPTS));
+
+          return gotoFlow(flowLinks);
+        } else {
+          console.error("Opción seleccionada no válida.");
+          return gotoFlow(flowLinks);
+        }
+      } catch (error) {
+        console.error("Ocurrió un error:", error);
+        
         return gotoFlow(flowLinks);
       }
-    },
+    }
   );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 const flowPdf = bot
   .addKeyword([ "pdf", "audio"]) // Agrega "audio" como palabra clave
@@ -674,19 +766,19 @@ const main = async () => {
   const adapterDB = new MockAdapter();
   const adapterFlow = bot.createFlow([
     flowLinks,
-    flowPdf,
+    // flowPdf,
 
-    flowPedido,
-    flowPollo,
-    flowRes,
-    flowCerdo,
-    flowPescado,
-    flowProteina,
-    flowSopa,
-    flowBebida,
-    flowAcomp_a,
-    flowAcomp_b,
-    flowAcomp_c,
+    // flowPedido,
+    // flowPollo,
+    // flowRes,
+    // flowCerdo,
+    // flowPescado,
+    // flowProteina,
+    // flowSopa,
+    // flowBebida,
+    // flowAcomp_a,
+    // flowAcomp_b,
+    // flowAcomp_c,
 
     flowEmpty,
   ]);

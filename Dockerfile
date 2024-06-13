@@ -1,3 +1,5 @@
+#/home/kamilo/programming/kafka_wp/Dockerfile
+# es la ruta del dockerfile
 FROM node:18-bullseye as bot
 WORKDIR /app
 COPY package*.json ./
