@@ -1,0 +1,22 @@
+
+version: '2'
+
+services:
+  bot:
+    build:
+      context: /home/kamilo/programming/kafka_wp
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"  # Exponer el puerto 3000 al exterior
+    environment:
+      - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - PORT=${PORT}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - kamilo
+
+networks:
+  kamilo:
+    external:
+      name: kamilo
