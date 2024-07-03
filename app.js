@@ -12,23 +12,11 @@ import MockAdapter from "@bot-whatsapp/database/mock";
 //   "1pcBkWWa0x-q-mwV54bRMOixjCv-tFVvLSrzGPsPPQgQ",
 // );
 
-// Importa la función sendKafkaMessage desde el archivo producer.js
-import { sendKafkaMessage } from "./services/kafka/producer.js";
+import { sendKafkaMessage } from "./services/kafka/producer.js"
+import { runConsumer  } from "./services/kafka/consumer.js";
 
-// Función para enviar el mensaje "hola" al tema especificado
-async function enviarMensajeHola() {
-  const topic = "prueba"; // Reemplaza "mi-topico" con el nombre de tu tema
-  const message = "hola, este es un mensaje de prueba";
-
-  try {
-    // Llama a la función sendKafkaMessage para enviar el mensaje
-    await sendKafkaMessage(topic, message);
-    console.log("Mensaje 'hola' enviado exitosamente al tema:", topic);
-  } catch (error) {
-    console.error("Error al enviar el mensaje:", error.message);
-  }
-}
-enviarMensajeHola();
+// Inicializa el consumidor al inicio de la aplicación
+runConsumer().catch(error => console.error(`Error en runConsumer: ${error}`));
 
 let GLOBAL_OPTS = {};
 let opcionSeleccionadaGlobal = null; // Variable global para almacenar la elección del usuario
@@ -78,52 +66,49 @@ const flowLinks = bot
         // Verificar si la opción seleccionada es válida
         if (opcionSeleccionada) {
           GLOBAL_OPTS[opcionSeleccionada] = linkUsuario; // Asignar el enlace proporcionado por el usuario a la opción seleccionada
-          console.log(GLOBAL_OPTS);
+          // console.log(GLOBAL_OPTS);
 
         sendKafkaMessage("prueba", JSON.stringify(GLOBAL_OPTS));
 
-          return gotoFlow(flowLinks);
+          // return gotoFlow(flowConsumer)
         } else {
           console.error("Opción seleccionada no válida.");
-          return gotoFlow(flowLinks);
+          // return gotoFlow(flowLinks);
         }
       } catch (error) {
         console.error("Ocurrió un error:", error);
         
-        return gotoFlow(flowLinks);
+        // return gotoFlow(flowLinks);
+      }
+    }
+  )
+  .addAnswer(
+    `Estamos trabajando en la descarga:`,
+    async function (ctx, {gotoFlow}) {
+      console.log("estamos trabajando en la descarga jajajaja ");
+      try {
+        // Aquí se espera la llegada de un mensaje desde Kafka
+        const mensajeKafka = await new Promise((resolve, reject) => {
+          // Crea un listener para recibir mensajes desde Kafka
+          consumer.run({
+            eachMessage: async ({ topic, partition, message }) => {
+              resolve(message.value.toString());
+              console.log(message.value.toString());
+            }
+          });
+        });
+
+        // Enviar la respuesta usando el mensaje obtenido de Kafka
+        bot.reply(`Respuesta recibida desde Kafka: ${mensajeKafka}`);
+        console.log("fuera de la funcion mensaje kafka");
+
+      } catch (error) {
+        console.error("Error en la función mostrarRespuestaDesdeKafka:", error);
+        // Manejar el error según sea necesario
+        response.send("Hubo un error al obtener la respuesta desde Kafka.");
       }
     }
   );
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -766,6 +751,7 @@ const main = async () => {
   const adapterDB = new MockAdapter();
   const adapterFlow = bot.createFlow([
     flowLinks,
+    // flowConsumer,
     // flowPdf,
 
     // flowPedido,
