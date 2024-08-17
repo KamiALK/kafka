@@ -14,15 +14,16 @@ import MockAdapter from "@bot-whatsapp/database/mock";
 
 import { sendKafkaMessage } from "./services/kafka/producer.js"
 import { runConsumer  } from "./services/kafka/consumer.js";
+import { disconnectConsumer  } from "./services/kafka/consumer.js";
 
 // Inicializa el consumidor al inicio de la aplicación
-runConsumer().catch(error => console.error(`Error en runConsumer: ${error}`));
+// const kafka = runConsumer().catch(error => console.error(`Error en runConsumer: ${error}`));
 
 let GLOBAL_OPTS = {};
 let opcionSeleccionadaGlobal = null; // Variable global para almacenar la elección del usuario
 
 const flowLinks = bot
-  .addKeyword(["links", "pdf"])
+  .addKeyword(["Links", "link"])
   .addAnswer([
     `Bienvenidos a mi asistente de examen`,
     `selecciona segun la opcion:`,
@@ -36,8 +37,11 @@ const flowLinks = bot
     { capture: true },
     async (ctx, { gotoFlow, state }) => {
       try {
+      disconnectConsumer();
       GLOBAL_OPTS = {};
         const opcionSeleccionada = parseInt(ctx.body.trim());
+
+      // runConsumer().catch(error => console.error(`Error en runConsumer: ${error}`));
         
         // Verificar si la opción seleccionada es válida
         if (opcionSeleccionada >= 1 && opcionSeleccionada <= 4) {
@@ -60,6 +64,8 @@ const flowLinks = bot
       try {
         const linkUsuario = ctx.body.trim();
 
+
+
         // Obtener la opción seleccionada del usuario desde la variable global
         const opcionSeleccionada = opcionSeleccionadaGlobal;
 
@@ -68,11 +74,17 @@ const flowLinks = bot
           GLOBAL_OPTS[opcionSeleccionada] = linkUsuario; // Asignar el enlace proporcionado por el usuario a la opción seleccionada
           // console.log(GLOBAL_OPTS);
 
-        sendKafkaMessage("prueba", JSON.stringify(GLOBAL_OPTS));
+        // await disconnectConsumer();
+        sendKafkaMessage("links", JSON.stringify(GLOBAL_OPTS));
+        // runConsumer().catch(error => console.error(`Error en runConsumer: ${error}`));
 
+
+        // runConsumer().catch(error => console.error(`Error en runConsumer: ${error}`));
           // return gotoFlow(flowConsumer)
         } else {
           console.error("Opción seleccionada no válida.");
+          // await disconnectConsumer();
+
           // return gotoFlow(flowLinks);
         }
       } catch (error) {
@@ -83,89 +95,119 @@ const flowLinks = bot
     }
   )
   .addAnswer(
-    `Estamos trabajando en la descarga:`,
-    async function (ctx, {gotoFlow}) {
-      console.log("estamos trabajando en la descarga jajajaja ");
-      try {
-        // Aquí se espera la llegada de un mensaje desde Kafka
-        const mensajeKafka = await new Promise((resolve, reject) => {
-          // Crea un listener para recibir mensajes desde Kafka
-          consumer.run({
-            eachMessage: async ({ topic, partition, message }) => {
-              resolve(message.value.toString());
-              console.log(message.value.toString());
-            }
-          });
-        });
-
+    `Trabajando...`,
+    null, 
+    // async (ctx, { gotoFlow }) => {
+    async (_, { flowDynamic }) => {
+    try {
+      // Espera a que runConsumer se resuelva
+      const kafka = await runConsumer();
+      
+      // Asegúrate de que kafka tenga un valor antes de usarlo
+      if (kafka) {
         // Enviar la respuesta usando el mensaje obtenido de Kafka
-        bot.reply(`Respuesta recibida desde Kafka: ${mensajeKafka}`);
-        console.log("fuera de la funcion mensaje kafka");
+        await flowDynamic(`Respuesta recibida desde app dentro try: ${kafka}`);
+        console.log("Mensaje desde app: dentro try", kafka);
+        await disconnectConsumer();
+      } else {
+        await flowDynamic("No se recibió ningún mensaje válido desde Kafka.");
+        await disconnectConsumer();
+      }
 
+      console.log("Mensaje Kafka: app fuera try", kafka);
+
+    } catch (error) {
+      console.error("Error en la función de consumo:", error);
+      await flowDynamic("Hubo un error al obtener la respuesta desde Kafka.");
+    }
+  }
+  );
+
+
+
+import axios from 'axios'; // Importa axios para solicitudes HTTP
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url'; // Para obtener el nombre del archivo en la ruta actual
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const flowArchivo = bot
+  .addKeyword("pdf" ) // Agrega "pdf" y "audio" como palabras clave
+  .addAnswer(
+    `Adjunte el archivo`,
+    { capture: true },
+    async (ctx, { gotoFlow }) => {
+      try {
+        // Verifica si `documentMessage` está definido
+        const documentMessage = ctx.message?.documentMessage;
+
+        if (documentMessage) {
+          const fileUrl = documentMessage.url; // Obtén la URL del archivo
+          const fileName = documentMessage.fileName; // Obtén el nombre del archivo
+
+          const filePath = path.resolve(__dirname, fileName); // Ruta donde guardar el archivo
+
+          // Descargar el archivo
+          const response = await axios({
+            url: fileUrl,
+            method: 'GET',
+            responseType: 'stream'
+          });
+
+          // Guardar el archivo en el sistema de archivos
+          response.data.pipe(fs.createWriteStream(filePath));
+          console.log('Archivo descargado y guardado en', filePath);
+        } else {
+          console.log('No hay mensajes de documentos en el mensaje.');
+        }
+
+        // Redirigir al siguiente flujo
+        return gotoFlow(flowEnvio);
       } catch (error) {
-        console.error("Error en la función mostrarRespuestaDesdeKafka:", error);
-        // Manejar el error según sea necesario
-        response.send("Hubo un error al obtener la respuesta desde Kafka.");
+        console.error("Ocurrió un error:", error.message);
+        // Redirigir al flujo principal en caso de error
+        return gotoFlow(flowEnvio);
       }
     }
   );
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-const flowPdf = bot
-  .addKeyword([ "pdf", "audio"]) // Agrega "audio" como palabra clave
-  .addAnswer([`Bienvenidos a mi asistente de examen`, `Escribe el *link* o envía un PDF o audio`])
+const flowEnvio = bot
+  .addKeyword("envio")
   .addAnswer(
-    `¿Te interesa algún enlace o quieres enviar un PDF o audio?`,
-    { capture: true },
-    async (ctx, { gotoFlow }) => {
+    `Vamos a devolver el archivo`,
+    null,
+    async (_, { flowDynamic }) => {
       try {
-        // Verificar si el mensaje es un enlace, un PDF o un audio
-        const isLink = ctx.body.includes("http");
-        const isPDF = ctx.message.attachments.find(attachment => attachment.type === "document" && attachment.payload.mimetype === "application/pdf");
-        const isAudio = ctx.message.attachments.find(attachment => attachment.type === "audio");
+        // Nombre del archivo específico
+        const fileName = 'hola.txt';
+        const filePath = '/home/kamilo/programming/kafka_wp/hola.txt';
 
-        if (isLink) {
-          const linkUsuario = ctx.body.trim(); // Capturar el enlace proporcionado por el usuario
-          await sendKafkaMessage("prueba", linkUsuario); // Enviar el enlace al topic de Kafka
-        } else if (isPDF) {
-          const pdfURL = isPDF.payload.url; // Obtener la URL del PDF adjunto
-          await sendKafkaMessage("prueba", pdfURL); // Enviar la URL del PDF al topic de Kafka
-        } else if (isAudio) {
-          const audioURL = isAudio.payload.url; // Obtener la URL del audio adjunto
-          await sendKafkaMessage("prueba", audioURL); // Enviar la URL del audio al topic de Kafka
-        }
+        // Verificar que el archivo existe
+        // if (fs.existsSync(filePath)) {
+          // Crear un objeto de mensaje para enviar el archivo
+        const fileMessage = {
+            body: 'Aquí tienes el archivo solicitado:',
+            media:'/home/kamilo/programming/kafka_wp/hola.txt', 
+            // Ruta al archivo en el servidor
+            delay: 1000 // Puedes ajustar el retraso si es necesario
+          };
 
-        // Redirigir al siguiente flujo
-        return gotoFlow(flowLinks);
+          // Enviar el mensaje que incluye el archivo
+          await flowDynamic([fileMessage]);
+
+          // Mensaje de confirmación
+          await flowDynamic('Archivo enviado al usuario.');
+        // } else {
+          // await flowDynamic('El archivo no se encontró en la ruta esperada:', filePath);
+        // }
       } catch (error) {
-        console.error("Ocurrió un error:", error);
-        // Redirigir al flujo principal en caso de error
-        return gotoFlow(flowLinks);
+        console.log("Error al enviar el archivo:", error);
+        console.log(filePath)
       }
-    },
+    }
   );
-let GLOBAL_STATE = [];
 const MENU_CLIENTE = {
   pollo: [],
   res: [],
@@ -752,7 +794,9 @@ const main = async () => {
   const adapterFlow = bot.createFlow([
     flowLinks,
     // flowConsumer,
-    // flowPdf,
+    // flowArchivo,
+    flowEnvio,
+
 
     // flowPedido,
     // flowPollo,
